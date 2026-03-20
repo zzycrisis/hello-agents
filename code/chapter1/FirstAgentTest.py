@@ -30,17 +30,23 @@ def get_weather(city: str) -> str:
     """
     通过调用 wttr.in API 查询真实的天气信息。
     """
+    # 清理模型可能输出的额外引号/空白，降低无效城市名概率
+    city = city.strip().strip("\"'“”‘’")
     # API端点，我们请求JSON格式的数据
     url = f"https://wttr.in/{city}?format=j1"
     
     try:
         # 发起网络请求
-        response = requests.get(url)
+        response = requests.get(
+            url,
+            headers={"User-Agent": "hello-agents/1.0", "Accept": "application/json"},
+            timeout=15,
+        )
         # 检查响应状态码是否为200 (成功)
         response.raise_for_status() 
         # 解析返回的JSON数据
-        data = response.json()
-        
+        payload = response.json()
+        data = payload.get("data", {})
         # 提取当前天气状况
         current_condition = data['current_condition'][0]
         weather_desc = current_condition['weatherDesc'][0]['value']
@@ -52,9 +58,12 @@ def get_weather(city: str) -> str:
     except requests.exceptions.RequestException as e:
         # 处理网络错误
         return f"错误：查询天气时遇到网络问题 - {e}"
+    except ValueError as e:
+        # 处理JSON解析错误
+        return f"错误：天气接口返回了非JSON数据 - {e}"
     except (KeyError, IndexError) as e:
         # 处理数据解析错误
-        return f"错误：解析天气数据失败，可能是城市名称无效 - {e}"
+        return f"错误：解析天气数据失败，返回结构缺少关键字段 - {e}"
 
 
 
@@ -142,10 +151,11 @@ import re
 
 # --- 1. 配置LLM客户端 ---
 # 请根据您使用的服务，将这里替换成对应的凭证和地址
-API_KEY = "YOUR_API_KEY"
-BASE_URL = "YOUR_BASE_URL"
-MODEL_ID = "YOUR_MODEL_ID"
-os.environ['TAVILY_API_KEY'] = "YOUR_TAVILY_API_KEY"
+API_KEY = "sk-z6K6bLP65Aa0IJ4cE9E2Ad64232e4cA3A165E65208CfF262"
+BASE_URL = "https://aihubmix.com/v1"
+MODEL_ID = "coding-glm-4.7-free"
+# os.environ['TAVILY_API_KEY'] = os.getenv("TAVILY_API_KEY")
+os.environ['TAVILY_API_KEY'] = "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"
 
 llm = OpenAICompatibleClient(
     model=MODEL_ID,
@@ -195,10 +205,16 @@ for i in range(5): # 设置最大循环次数
     
     tool_name = re.search(r"(\w+)\(", action_str).group(1)
     args_str = re.search(r"\((.*)\)", action_str).group(1)
-    kwargs = dict(re.findall(r'(\w+)="([^"]*)"', args_str))
+    # 同时支持单引号和双引号参数，降低模型输出格式差异导致的解析失败
+    kwargs = dict(re.findall(r"(\w+)=['\"]([^'\"]*)['\"]", args_str))
 
     if tool_name in available_tools:
-        observation = available_tools[tool_name](**kwargs)
+        try:
+            observation = available_tools[tool_name](**kwargs)
+        except TypeError as e:
+            observation = f"错误：工具参数不匹配 - {e}"
+        except Exception as e:
+            observation = f"错误：执行工具时发生未预期异常 - {e}"
     else:
         observation = f"错误：未定义的工具 '{tool_name}'"
 
