@@ -6,7 +6,7 @@ import os
 import asyncio
 from typing import List, Dict, Any
 from dotenv import load_dotenv
-
+from openai import AzureOpenAI
 # 加载环境变量
 load_dotenv()
 
@@ -22,8 +22,22 @@ def create_openai_model_client():
     return OpenAIChatCompletionClient(
         model=os.getenv("LLM_MODEL_ID", "gpt-4o"),
         api_key=os.getenv("LLM_API_KEY"),
-        base_url=os.getenv("LLM_BASE_URL", "https://api.openai.com/v1")
+        base_url=os.getenv("LLM_BASE_URL", "https://api.openai.com/v1"),
+        model_info={
+            "function_calling": True,
+            "max_tokens": 4096,
+            "context_length": 32768,
+            "vision": False,
+            "json_output": True, # 支持 JSON 输出
+            "family": "glm", # 模型家族
+            "structured_output": True, # 支持结构化输出
+        }
     )
+    # return AzureOpenAI(
+    #     api_key=os.getenv("AZURE_OPENAI_API_KEY"),
+    #     api_version=os.getenv("AZURE_OPENAI_API_VERSION"),
+    #     azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
+    # )
 
 def create_product_manager(model_client):
     """创建产品经理智能体"""
